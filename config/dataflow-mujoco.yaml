@@ -1,0 +1,64 @@
+# Copyright 2026 Enactic, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+nodes:
+  - id: quittable-tick-leader
+    build: pip install git+https://github.com/enactic/dora-openarm-quitter.git
+    path: dora-openarm-quitter
+    inputs:
+      tick: dora/timer/millis/2
+    outputs:
+      - tick
+  - id: udp-receiver
+    build: pip install -e ..
+    path: dora-openarm-quest-receiver
+    args: "--host 0.0.0.0 --port 5006"
+    inputs:
+      tick: quittable-tick-leader/tick
+    outputs:
+      - pose_right
+      - trigger_right
+      - pose_left
+      - trigger_left
+      - joystick_y
+      - button_a
+      - button_b
+      - status
+  - id: ik
+    build: pip install git+https://github.com/enactic/dora-openarm-kinematics
+    path: dora-openarm-ik
+    args: "--mode bimanual --max-iters 10 --dt 0.1 --damping 0.1 --posture-cost 0.01 --lm-damping 0.01"
+    inputs:
+      tick: quittable-tick-leader/tick
+      target_right: udp-receiver/pose_right
+      target_left:  udp-receiver/pose_left
+      trigger_right: udp-receiver/trigger_right
+      trigger_left:  udp-receiver/trigger_left
+    outputs:
+      - position_left
+      - position_right
+      - status
+  # ── MuJoCo viewer (replaces follower-right, follower-left, and all cameras) ──
+  - id: mujoco-viewer
+    build: pip install git+https://github.com/enactic/dora-openarm-mujoco
+    path: dora-openarm-mujoco
+    args: "--keyframe home --viewer --debug-frames"
+    inputs:
+      position_left:  ik/position_left
+      position_right: ik/position_right
+      pose_right:     udp-receiver/pose_right
+      pose_left:      udp-receiver/pose_left
+      joystick_y:     udp-receiver/joystick_y
+    outputs:
+      - status

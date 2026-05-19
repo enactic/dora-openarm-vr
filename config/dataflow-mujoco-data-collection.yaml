@@ -1,0 +1,106 @@
+# Copyright 2026 Enactic, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+nodes:
+  - id: ui
+    build: pip install git+https://github.com/enactic/dora-openarm-data-collection-ui
+    path: dora-openarm-data-collection-ui
+    env:
+      METADATA_FILE: "test_metadata.yaml"
+    inputs:
+      tick: dora/timer/secs/1
+      button_a:
+        source: udp-receiver/button_a
+        queue_size: 100
+      button_b:
+        source: udp-receiver/button_b
+        queue_size: 100
+    outputs:
+      - command
+  - id: quittable-tick-leader
+    build: pip install git+https://github.com/enactic/dora-openarm-quitter.git
+    path: dora-openarm-quitter
+    inputs:
+      tick: dora/timer/millis/2
+    outputs:
+      - tick
+  - id: udp-receiver
+    build: pip install -e ..
+    path: dora-openarm-quest-receiver
+    args: "--host 0.0.0.0 --port 5006"
+    inputs:
+      tick: quittable-tick-leader/tick
+    outputs:
+      - pose_right
+      - trigger_right
+      - pose_left
+      - trigger_left
+      - joystick_y
+      - button_a
+      - button_b
+      - status
+  - id: ik
+    build: pip install git+https://github.com/enactic/dora-openarm-kinematics
+    path: dora-openarm-ik
+    args: "--mode bimanual --max-iters 10 --dt 0.1 --damping 0.1 --posture-cost 0.01 --lm-damping 0.01"
+    inputs:
+      tick: quittable-tick-leader/tick
+      target_right: udp-receiver/pose_right
+      target_left:  udp-receiver/pose_left
+      trigger_right: udp-receiver/trigger_right
+      trigger_left:  udp-receiver/trigger_left
+    outputs:
+      - position_left
+      - position_right
+      - status
+  # ── MuJoCo viewer (replaces follower-right, follower-left, and all cameras) ──
+  - id: mujoco-collect
+    build: pip install git+https://github.com/enactic/dora-openarm-mujoco
+    path: dora-openarm-mujoco
+    # can swap xml with --xml path/to/your/xml/file
+    args: "--keyframe home --enable-collision --ctrl --render --viewer "
+    env:
+      DISPLAY: ":1"   # needed when running headless with Xvfb
+    inputs:
+      position_left:  ik/position_left
+      position_right: ik/position_right
+      pose_right:     udp-receiver/pose_right
+      pose_left:      udp-receiver/pose_left
+      joystick_y:     udp-receiver/joystick_y
+    outputs:
+      - status
+      - arm_right_observation   # MuJoCo qpos (replaces follower-right/state)
+      - arm_left_observation    # MuJoCo qpos (replaces follower-left/state)
+      - camera_wrist_right      # replaces camera-wrist-right/image
+      - camera_wrist_left       # replaces camera-wrist-left/image
+      - camera_head_left
+      - camera_head_right
+      - camera_ceiling          # replaces camera-ceiling/image
+  - id: recorder
+    build: pip install git+https://github.com/enactic/dora-openarm-dataset-recorder
+    path: dora-openarm-dataset-recorder
+    env:
+      METADATA_FILE: "test_metadata.yaml"
+      DIRECTORY: "test_data/mujoco_collection"
+    inputs:
+      command:               ui/command
+      arm_right_action:      ik/position_right
+      arm_right_observation: mujoco-collect/arm_right_observation
+      arm_left_action:       ik/position_left
+      arm_left_observation:  mujoco-collect/arm_left_observation
+      camera_wrist_right:    mujoco-collect/camera_wrist_right
+      camera_wrist_left:     mujoco-collect/camera_wrist_left
+      camera_head_left:      mujoco-collect/camera_head_left
+      camera_head_right:     mujoco-collect/camera_head_right
+      camera_ceiling:        mujoco-collect/camera_ceiling

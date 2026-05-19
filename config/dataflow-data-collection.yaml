@@ -1,0 +1,218 @@
+# Copyright 2026 Enactic, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+nodes:
+  - id: ui
+    build: pip install git+https://github.com/enactic/dora-openarm-data-collection-ui
+    path: dora-openarm-data-collection-ui
+    env:
+      METADATA_FILE: "test_metadata.yaml"
+    inputs:
+      tick: dora/timer/secs/1
+      button_a:
+        source: udp-receiver/button_a
+        queue_size: 100
+      button_b:
+        source: udp-receiver/button_b
+        queue_size: 100
+    outputs:
+      - command
+
+  - id: quittable-tick-leader
+    build: pip install git+https://github.com/enactic/dora-openarm-quitter
+    path: dora-openarm-quitter
+    inputs:
+      command: ui/command
+      tick: dora/timer/millis/2
+    outputs:
+      - tick
+
+  - id: quittable-tick-camera
+    build: pip install git+https://github.com/enactic/dora-openarm-quitter
+    path: dora-openarm-quitter
+    inputs:
+      command: ui/command
+      tick: dora/timer/millis/33
+    outputs:
+      - tick
+
+  - id: udp-receiver
+    build: pip install -e ..
+    path: dora-openarm-quest-receiver
+    args: "--host 0.0.0.0 --port 5006"
+    inputs:
+      tick: quittable-tick-leader/tick
+    outputs:
+      - pose_right
+      - trigger_right
+      - pose_left
+      - trigger_left
+      - joystick_y
+      - button_a
+      - button_b
+      - status
+
+  - id: ik
+    build: pip install git+https://github.com/enactic/dora-openarm-kinematics
+    path: dora-openarm-ik
+    args: "--mode bimanual --max-iters 10 --dt 0.1 --damping 0.1 --posture-cost 0.01 --lm-damping 0.01"
+    inputs:
+      tick: quittable-tick-leader/tick
+      target_right: udp-receiver/pose_right
+      target_left:  udp-receiver/pose_left
+      trigger_right: udp-receiver/trigger_right
+      trigger_left:  udp-receiver/trigger_left
+    outputs:
+      - position_left
+      - position_right
+      - status
+
+  # ── MuJoCo viewer  ──
+  - id: mujoco-viewer
+    build: pip install git+https://github.com/enactic/dora-openarm-mujoco
+    path: dora-openarm-mujoco
+    args: "--keyframe home --viewer --debug-frames"
+    inputs:
+      position_left:  ik/position_left
+      position_right: ik/position_right
+      pose_right:     udp-receiver/pose_right
+      pose_left:      udp-receiver/pose_left
+      joystick_y:     udp-receiver/joystick_y
+    outputs:
+      - status
+
+  - id: follower-right
+    build: pip install git+https://github.com/enactic/dora-openarm
+    path: dora-openarm
+    # args: "--side right --align-trigger gripper --config ../../openarm_driver/config/openarm_cell_higher_pd.yaml"
+    args: "--side right --align-trigger gripper"
+    inputs:
+      # Event ID is only used. Event value isn't used.
+      request_state: ik/position_right
+      move_position: ik/position_right
+    outputs:
+      - state
+      - status
+
+  - id: follower-left
+    build: pip install git+https://github.com/enactic/dora-openarm
+    path: dora-openarm
+    # args: "--side left --align-trigger gripper --config ../../openarm_driver/config/openarm_cell_higher_pd.yaml"
+    args: "--side left --align-trigger gripper"
+    inputs:
+      request_state: ik/position_left
+      move_position: ik/position_left
+    outputs:
+      - state
+      - status
+
+  - id: lifter
+    build: pip install git+https://github.com/enactic/dora-openarm-cell-lifter
+    path: dora-openarm-cell-lifter
+    inputs:
+      joystick_y: udp-receiver/joystick_y
+    outputs:
+      - elevation_observation
+      - elevation_action
+
+  - id: camera-wrist-right
+    build: pip install opencv-video-capture
+    path: opencv-video-capture
+    env:
+      CAPTURE_PATH: "/dev/camera_wrist_right"
+      ENCODING: "jpeg"
+      IMAGE_HEIGHT: 600
+      IMAGE_WIDTH: 960
+      JPEG_QUALITY: 90
+    inputs:
+      tick: quittable-tick-camera/tick
+    outputs:
+      - image
+
+  - id: camera-wrist-left
+    build: pip install opencv-video-capture
+    path: opencv-video-capture
+    env:
+      CAPTURE_PATH: "/dev/camera_wrist_left"
+      ENCODING: "jpeg"
+      IMAGE_HEIGHT: 600
+      IMAGE_WIDTH: 960
+      JPEG_QUALITY: 90
+    inputs:
+      tick: quittable-tick-camera/tick
+    outputs:
+      - image
+
+  - id: camera-head-stereo
+    build: pip install opencv-video-capture
+    path: opencv-video-capture
+    env:
+      CAPTURE_PATH: "/dev/camera_head_stereo"
+      ENCODING: "bgr8"
+      IMAGE_HEIGHT: 720
+      IMAGE_WIDTH: 2560
+    inputs:
+      tick: quittable-tick-camera/tick
+    outputs:
+      - image
+
+  - id: camera-head-stereo-splitter
+    build: pip install git+https://github.com/enactic/dora-opencv-image-splitter
+    path: dora-opencv-image-splitter
+    inputs:
+      tick: quittable-tick-camera/tick
+      image: camera-head-stereo/image
+    env:
+      SPLIT_MODE: "vertical"
+      NUM_SPLITS: 2
+      JPEG_QUALITY: 90
+      IMAGE_HEIGHT: 720
+      IMAGE_WIDTH: 2560
+    outputs:
+      - image_0
+      - image_1
+
+  - id: camera-ceiling
+    build: pip install opencv-video-capture
+    path: opencv-video-capture
+    env:
+      CAPTURE_PATH: "/dev/camera_ceiling"
+      ENCODING: "jpeg"
+      IMAGE_HEIGHT: 600
+      IMAGE_WIDTH: 960
+      JPEG_QUALITY: 90
+    inputs:
+      tick: quittable-tick-camera/tick
+    outputs:
+      - image
+
+  - id: recorder
+    build: pip install git+https://github.com/enactic/dora-openarm-dataset-recorder
+    path: dora-openarm-dataset-recorder
+    env:
+      METADATA_FILE: "test_metadata.yaml"
+      DIRECTORY: "vr_data"
+    inputs:
+      command: ui/command
+      arm_right_action: ik/position_right
+      arm_right_observation: follower-right/state
+      arm_left_action: ik/position_left
+      arm_left_observation: follower-left/state
+      elevation_action: lifter/elevation_action
+      elevation_observation: lifter/elevation_observation
+      camera_wrist_right: camera-wrist-right/image
+      camera_wrist_left: camera-wrist-left/image
+      camera_head_left: camera-head-stereo-splitter/image_0
+      camera_head_right: camera-head-stereo-splitter/image_1
+      camera_ceiling: camera-ceiling/image

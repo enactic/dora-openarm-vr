@@ -31,9 +31,24 @@ VR-based teleoperation for the OpenArm robot using Meta Quest 3 and dora-rs data
 
 ## Quick Start
 
-Test running teleoperation in mujoco.
+Test running teleoperation in MuJoCo.
 
 ```bash
 uv run dora build config/dataflow-mujoco.yaml --uv
 uv run dora run config/dataflow-mujoco.yaml --uv
 ```
+
+## Related links
+
+- 💬 Join the community on [Discord](https://discord.gg/FsZaZ4z3We)
+- 📬 Contact us through <openarm@enactic.ai>
+
+## License
+
+Licensed under the Apache License 2.0. See [LICENSE.txt](LICENSE.txt) for details.
+
+Copyright 2026 Enactic, Inc.
+
+## Code of Conduct
+
+All participation in the OpenArm project is governed by our [Code of Conduct](CODE_OF_CONDUCT.md).

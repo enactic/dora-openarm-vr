@@ -68,11 +68,14 @@ from utils.smoothing import OneEuroPoseSmoother
 from utils.udp_receiver import JsonUdpReceiver
 
 # ── Frame alignment — edit here to tune ──────────────────────────────────────
-_FRAME_ROT: np.ndarray = np.array([
-    [  0.,   0.,  -1.],
-    [ -1.,   0.,   0.],
-    [  0.,   1.,   0.],
-], dtype=np.float64)
+_FRAME_ROT: np.ndarray = np.array(
+    [
+        [0.0, 0.0, -1.0],
+        [-1.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0],
+    ],
+    dtype=np.float64,
+)
 
 FRAME_OFFSET_NECK: np.ndarray = np.array([0.1, 0, 1.2], dtype=np.float64)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -80,13 +83,21 @@ FRAME_OFFSET_NECK: np.ndarray = np.array([0.1, 0, 1.2], dtype=np.float64)
 _DEFAULT_HOST = "0.0.0.0"
 _DEFAULT_PORT = 5006
 
-VALID_OK      = 0
-VALID_STALE   = 1
+VALID_OK = 0
+VALID_STALE = 1
 VALID_INVALID = 2
-_VALID_NAMES  = {VALID_OK: "OK", VALID_STALE: "STALE", VALID_INVALID: "INVALID"}
+_VALID_NAMES = {VALID_OK: "OK", VALID_STALE: "STALE", VALID_INVALID: "INVALID"}
 
-_R_FRAME      = Rotation.from_matrix(_FRAME_ROT)
-_IDENTITY_REF = {"x": 0.0, "y": 0.0, "z": 0.0, "qx": 0.0, "qy": 0.0, "qz": 0.0, "qw": 1.0}
+_R_FRAME = Rotation.from_matrix(_FRAME_ROT)
+_IDENTITY_REF = {
+    "x": 0.0,
+    "y": 0.0,
+    "z": 0.0,
+    "qx": 0.0,
+    "qy": 0.0,
+    "qz": 0.0,
+    "qw": 1.0,
+}
 
 
 def parse_lh_to_rh(c: dict) -> tuple[np.ndarray, Rotation]:
@@ -99,14 +110,15 @@ def parse_lh_to_rh(c: dict) -> tuple[np.ndarray, Rotation]:
     rot = Rotation.from_quat([-c["qx"], -c["qy"], c["qz"], c["qw"]])
     return pos, rot
 
+
 class QuestPoseProcessor:
     def process(self, msg: dict) -> tuple[np.ndarray | None, np.ndarray | None]:
-        ref_raw   = msg.get("rf")
+        ref_raw = msg.get("rf")
         right_raw = msg.get("rc")
-        left_raw  = msg.get("lc")
+        left_raw = msg.get("lc")
 
         p_ref, r_ref = parse_lh_to_rh(ref_raw or _IDENTITY_REF)
-        active_p_ref     = p_ref
+        active_p_ref = p_ref
         active_r_ref_inv = r_ref.inv()
 
         r_fix = Rotation.from_euler("z", 90, degrees=True)
@@ -118,22 +130,24 @@ class QuestPoseProcessor:
             p_out = _R_FRAME.apply(p_rel) + FRAME_OFFSET_NECK
             r_out = _R_FRAME * r_rel * r_fix
             q = r_out.as_quat()
-            return np.array([p_out[0], p_out[1], p_out[2], q[3], q[0], q[1], q[2]], dtype=np.float32)
+            return np.array(
+                [p_out[0], p_out[1], p_out[2], q[3], q[0], q[1], q[2]], dtype=np.float32
+            )
 
         pose_right = _rectify(right_raw) if right_raw is not None else None
-        pose_left  = _rectify(left_raw)  if left_raw  is not None else None
+        pose_left = _rectify(left_raw) if left_raw is not None else None
         return pose_right, pose_left
 
 
 def _run(args: argparse.Namespace) -> None:
-    receiver  = JsonUdpReceiver(args.host, args.port)
+    receiver = JsonUdpReceiver(args.host, args.port)
     processor = QuestPoseProcessor()
 
     smoother_right = OneEuroPoseSmoother(min_cutoff=2.0, beta=0.04, d_cutoff=1.5)
-    smoother_left  = OneEuroPoseSmoother(min_cutoff=2.0, beta=0.04, d_cutoff=1.5)
+    smoother_left = OneEuroPoseSmoother(min_cutoff=2.0, beta=0.04, d_cutoff=1.5)
 
-    prev_v_right   = VALID_OK
-    prev_v_left    = VALID_OK
+    prev_v_right = VALID_OK
+    prev_v_left = VALID_OK
     prev_v_overall = VALID_OK
 
     node = dora.Node()
@@ -148,9 +162,9 @@ def _run(args: argparse.Namespace) -> None:
             continue
         now = time.perf_counter()
 
-        v_overall = int(msg["v"])  if "v"  in msg else VALID_OK
-        v_right   = int(msg["vr"]) if "vr" in msg else VALID_OK
-        v_left    = int(msg["vl"]) if "vl" in msg else VALID_OK
+        v_overall = int(msg["v"]) if "v" in msg else VALID_OK
+        v_right = int(msg["vr"]) if "vr" in msg else VALID_OK
+        v_left = int(msg["vl"]) if "vl" in msg else VALID_OK
 
         if v_overall != prev_v_overall:
             print(
@@ -176,31 +190,43 @@ def _run(args: argparse.Namespace) -> None:
             pose_left = smoother_left.smooth(now, pose_left_raw)
 
         prev_v_right = v_right
-        prev_v_left  = v_left
+        prev_v_left = v_left
 
         ts = {"timestamp": time.time_ns()}
 
         if pose_right is not None:
             node.send_output("pose_right", pa.array(pose_right, type=pa.float32()), ts)
         if pose_left is not None:
-            node.send_output("pose_left",  pa.array(pose_left,  type=pa.float32()), ts)
+            node.send_output("pose_left", pa.array(pose_left, type=pa.float32()), ts)
 
         if "rt" in msg:
-            node.send_output("trigger_right", pa.array([msg["rt"]], type=pa.float32()), ts)
+            node.send_output(
+                "trigger_right", pa.array([msg["rt"]], type=pa.float32()), ts
+            )
         if "lt" in msg:
-            node.send_output("trigger_left",  pa.array([msg["lt"]], type=pa.float32()), ts)
+            node.send_output(
+                "trigger_left", pa.array([msg["lt"]], type=pa.float32()), ts
+            )
         if "lsy" in msg:
-            node.send_output("joystick_y",    pa.array([float(msg["lsy"])], type=pa.float32()), ts)
+            node.send_output(
+                "joystick_y", pa.array([float(msg["lsy"])], type=pa.float32()), ts
+            )
         if "a" in msg:
-            node.send_output("button_a", pa.array([bool(msg["a"])], type=pa.bool_()), ts)
+            node.send_output(
+                "button_a", pa.array([bool(msg["a"])], type=pa.bool_()), ts
+            )
         if "b" in msg:
-            node.send_output("button_b", pa.array([bool(msg["b"])], type=pa.bool_()), ts)
+            node.send_output(
+                "button_b", pa.array([bool(msg["b"])], type=pa.bool_()), ts
+            )
 
     receiver.close()
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Meta Quest VR pose receiver (dora node)")
+    parser = argparse.ArgumentParser(
+        description="Meta Quest VR pose receiver (dora node)"
+    )
     parser.add_argument("--host", default=_DEFAULT_HOST)
     parser.add_argument("--port", type=int, default=_DEFAULT_PORT)
     args = parser.parse_args()

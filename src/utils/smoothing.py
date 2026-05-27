@@ -37,7 +37,9 @@ def _slerp_quat(q1: np.ndarray, q2: np.ndarray, alpha: float) -> np.ndarray:
 class OneEuroPoseSmoother:
     """1 Euro Filter applied to position (adaptive cutoff) and rotation (SLERP)."""
 
-    def __init__(self, min_cutoff: float = 10.0, beta: float = 0.8, d_cutoff: float = 1.0):
+    def __init__(
+        self, min_cutoff: float = 10.0, beta: float = 0.8, d_cutoff: float = 1.0
+    ):
         self.min_cutoff = min_cutoff
         self.beta = beta
         self.d_cutoff = d_cutoff

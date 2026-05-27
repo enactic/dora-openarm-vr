@@ -18,6 +18,7 @@ import socket
 import threading
 import time
 
+
 class JsonUdpReceiver:
     """Background thread that binds a UDP socket and keeps the latest parsed JSON packet."""
 

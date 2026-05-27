@@ -11,3 +11,15 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+name: Feature Request
+description: Request a feature.
+type: Feature
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the feature you want
+      description: It's better that you also provide your use case.
+    validations:
+      required: true

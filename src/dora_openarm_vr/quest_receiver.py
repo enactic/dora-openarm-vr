@@ -64,8 +64,8 @@ import numpy as np
 import pyarrow as pa
 from scipy.spatial.transform import Rotation
 
-from utils.smoothing import OneEuroPoseSmoother
-from utils.udp_receiver import JsonUdpReceiver
+from .smoothing import OneEuroPoseSmoother
+from .udp_receiver import JsonUdpReceiver
 
 # ── Frame alignment — edit here to tune ──────────────────────────────────────
 _FRAME_ROT: np.ndarray = np.array(

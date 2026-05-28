@@ -34,7 +34,7 @@ Issues = "https://github.com/enactic/dora-openarm-vr/issues"
 Repository = "https://github.com/enactic/dora-openarm-vr.git"
 
 [project.scripts]
-dora-openarm-quest-receiver = "node.dora_openarm_quest_receiver.main:main"
+dora-openarm-quest-receiver = "dora_openarm_vr.quest_receiver:main"
 
 [build-system]
 requires = ["setuptools>=64", "wheel"]

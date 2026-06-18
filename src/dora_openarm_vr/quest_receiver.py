@@ -207,6 +207,14 @@ def _run(args: argparse.Namespace) -> None:
             node.send_output(
                 "trigger_left", pa.array([msg["lt"]], type=pa.float32()), ts
             )
+        if "rg" in msg:
+            node.send_output(
+                "grip_right", pa.array([float(msg["rg"])], type=pa.float32()), ts
+            )
+        if "lg" in msg:
+            node.send_output(
+                "grip_left", pa.array([float(msg["lg"])], type=pa.float32()), ts
+            )
         if "lsy" in msg:
             node.send_output(
                 "joystick_y", pa.array([float(msg["lsy"])], type=pa.float32()), ts

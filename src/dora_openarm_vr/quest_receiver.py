@@ -33,7 +33,7 @@ Meta Quest UDP pose receiver — specification
 - OK (0):     normal processing
 - STALE (1):  HMD is sending last-good pose; pass through smoother normally
 - INVALID(2): do not output pose; reset smoother so re-entry is jump-free
-- buttons/triggers are always forwarded regardless of pose validity
+- buttons/triggers/grips are always forwarded regardless of pose validity
 
 [3. Coordinate Transformation (LH to RH)]
 1. Position Flip:
@@ -111,8 +111,15 @@ def parse_lh_to_rh(c: dict) -> tuple[np.ndarray, Rotation]:
     return pos, rot
 
 
+def pose_to_array(pos: np.ndarray, rot: Rotation) -> np.ndarray:
+    q = rot.as_quat()
+    return np.array([pos[0], pos[1], pos[2], q[3], q[0], q[1], q[2]], dtype=np.float32)
+
+
 class QuestPoseProcessor:
-    def process(self, msg: dict) -> tuple[np.ndarray | None, np.ndarray | None]:
+    def process(
+        self, msg: dict
+    ) -> tuple[np.ndarray | None, np.ndarray | None, np.ndarray | None]:
         ref_raw = msg.get("rf")
         right_raw = msg.get("rc")
         left_raw = msg.get("lc")
@@ -129,14 +136,12 @@ class QuestPoseProcessor:
             r_rel = active_r_ref_inv * r
             p_out = _R_FRAME.apply(p_rel) + FRAME_OFFSET_NECK
             r_out = _R_FRAME * r_rel * r_fix
-            q = r_out.as_quat()
-            return np.array(
-                [p_out[0], p_out[1], p_out[2], q[3], q[0], q[1], q[2]], dtype=np.float32
-            )
+            return pose_to_array(p_out, r_out)
 
         pose_right = _rectify(right_raw) if right_raw is not None else None
         pose_left = _rectify(left_raw) if left_raw is not None else None
-        return pose_right, pose_left
+        pose_reference = pose_to_array(p_ref, r_ref) if ref_raw is not None else None
+        return pose_right, pose_left, pose_reference
 
 
 def _run(args: argparse.Namespace) -> None:
@@ -145,10 +150,12 @@ def _run(args: argparse.Namespace) -> None:
 
     smoother_right = OneEuroPoseSmoother(min_cutoff=2.0, beta=0.04, d_cutoff=1.5)
     smoother_left = OneEuroPoseSmoother(min_cutoff=2.0, beta=0.04, d_cutoff=1.5)
+    smoother_reference = OneEuroPoseSmoother(min_cutoff=2.0, beta=0.04, d_cutoff=1.5)
 
     prev_v_right = VALID_OK
     prev_v_left = VALID_OK
     prev_v_overall = VALID_OK
+    prev_v_reference = VALID_OK
 
     node = dora.Node()
     node.send_output("status", pa.array(["ready"]))
@@ -173,7 +180,7 @@ def _run(args: argparse.Namespace) -> None:
             )
             prev_v_overall = v_overall
 
-        pose_right_raw, pose_left_raw = processor.process(msg)
+        pose_right_raw, pose_left_raw, pose_reference_raw = processor.process(msg)
 
         if v_right == VALID_INVALID:
             if prev_v_right != VALID_INVALID:
@@ -189,8 +196,16 @@ def _run(args: argparse.Namespace) -> None:
         else:
             pose_left = smoother_left.smooth(now, pose_left_raw)
 
+        if v_overall == VALID_INVALID:
+            if prev_v_reference != VALID_INVALID:
+                smoother_reference.reset()
+            pose_reference = None
+        else:
+            pose_reference = smoother_reference.smooth(now, pose_reference_raw)
+
         prev_v_right = v_right
         prev_v_left = v_left
+        prev_v_reference = v_overall
 
         ts = {"timestamp": time.time_ns()}
 
@@ -198,6 +213,10 @@ def _run(args: argparse.Namespace) -> None:
             node.send_output("pose_right", pa.array(pose_right, type=pa.float32()), ts)
         if pose_left is not None:
             node.send_output("pose_left", pa.array(pose_left, type=pa.float32()), ts)
+        if pose_reference is not None:
+            node.send_output(
+                "pose_reference", pa.array(pose_reference, type=pa.float32()), ts
+            )
 
         if "rt" in msg:
             node.send_output(
@@ -217,7 +236,15 @@ def _run(args: argparse.Namespace) -> None:
             )
         if "lsy" in msg:
             node.send_output(
-                "joystick_y", pa.array([float(msg["lsy"])], type=pa.float32()), ts
+                "left_joystick_y",
+                pa.array([float(msg["lsy"])], type=pa.float32()),
+                ts,
+            )
+        if "rsy" in msg:
+            node.send_output(
+                "right_joystick_y",
+                pa.array([float(msg["rsy"])], type=pa.float32()),
+                ts,
             )
         if "a" in msg:
             node.send_output(
@@ -226,6 +253,14 @@ def _run(args: argparse.Namespace) -> None:
         if "b" in msg:
             node.send_output(
                 "button_b", pa.array([bool(msg["b"])], type=pa.bool_()), ts
+            )
+        if "x" in msg:
+            node.send_output(
+                "button_x", pa.array([bool(msg["x"])], type=pa.bool_()), ts
+            )
+        if "y" in msg:
+            node.send_output(
+                "button_y", pa.array([bool(msg["y"])], type=pa.bool_()), ts
             )
 
     receiver.close()

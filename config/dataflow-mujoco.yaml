@@ -29,11 +29,17 @@ nodes:
     outputs:
       - pose_right
       - trigger_right
+      - grip_right
       - pose_left
+      - pose_reference
       - trigger_left
-      - joystick_y
+      - grip_left
+      - joystick_y_left
+      - joystick_y_right
       - button_a
       - button_b
+      - button_x
+      - button_y
       - status
   - id: ik
     build: pip install git+https://github.com/enactic/dora-openarm-kinematics
@@ -59,6 +65,6 @@ nodes:
       position_right: ik/position_right
       pose_right:     udp-receiver/pose_right
       pose_left:      udp-receiver/pose_left
-      joystick_y:     udp-receiver/joystick_y
+      joystick_y:     udp-receiver/joystick_y_left
     outputs:
       - status

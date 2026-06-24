@@ -49,8 +49,8 @@ nodes:
       - pose_reference
       - trigger_left
       - grip_left
-      - left_joystick_y
-      - right_joystick_y
+      - joystick_y_left
+      - joystick_y_right
       - button_a
       - button_b
       - button_x
@@ -83,7 +83,7 @@ nodes:
       position_right: ik/position_right
       pose_right:     udp-receiver/pose_right
       pose_left:      udp-receiver/pose_left
-      joystick_y:     udp-receiver/left_joystick_y
+      joystick_y:     udp-receiver/joystick_y_left
     outputs:
       - status
       - arm_right_observation   # MuJoCo qpos (replaces follower-right/state)

@@ -236,13 +236,13 @@ def _run(args: argparse.Namespace) -> None:
             )
         if "lsy" in msg:
             node.send_output(
-                "left_joystick_y",
+                "joystick_y_left",
                 pa.array([float(msg["lsy"])], type=pa.float32()),
                 ts,
             )
         if "rsy" in msg:
             node.send_output(
-                "right_joystick_y",
+                "joystick_y_right",
                 pa.array([float(msg["rsy"])], type=pa.float32()),
                 ts,
             )

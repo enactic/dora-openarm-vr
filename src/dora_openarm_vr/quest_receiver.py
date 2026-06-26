@@ -164,6 +164,10 @@ def _run(args: argparse.Namespace) -> None:
         if event["type"] != "INPUT" or event["id"] != "tick":
             continue
 
+        recv_ts = receiver.drain_recv_timestamps()
+        if recv_ts:
+            node.send_output("vr_recv_ts", pa.array(recv_ts, type=pa.int64()))
+
         msg = receiver.latest()
         if msg is None:
             continue

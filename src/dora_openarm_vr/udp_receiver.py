@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import collections
 import json
 import select
 import socket
@@ -28,6 +29,7 @@ class JsonUdpReceiver:
         self._buf_size = buf_size
         self._lock = threading.Lock()
         self._latest: dict | None = None
+        self._recv_ts: collections.deque[int] = collections.deque(maxlen=512)
         self._running = True
         self._thread = threading.Thread(target=self._loop, daemon=True)
         self._thread.start()
@@ -35,6 +37,13 @@ class JsonUdpReceiver:
     def latest(self) -> dict | None:
         with self._lock:
             return self._latest
+
+    def drain_recv_timestamps(self) -> list[int]:
+        """Return and clear the arrival timestamps (ns) collected since last call."""
+        with self._lock:
+            items = list(self._recv_ts)
+            self._recv_ts.clear()
+            return items
 
     def close(self) -> None:
         self._running = False
@@ -60,17 +69,23 @@ class JsonUdpReceiver:
                     while self._running:
                         try:
                             data, _ = srv.recvfrom(self._buf_size)
+                            recv_ns = time.time_ns()
                             last_msg = self._parse_packet(data)
+                            arrivals = [recv_ns] if last_msg is not None else []
 
                             # Drain any queued datagrams, keep only the freshest
+                            # pose, but record every packet's real arrival time.
                             while select.select([srv], [], [], 0.0)[0]:
                                 data, _ = srv.recvfrom(self._buf_size)
+                                recv_ns = time.time_ns()
                                 parsed = self._parse_packet(data)
                                 if parsed is not None:
+                                    arrivals.append(recv_ns)
                                     last_msg = parsed
 
-                            if last_msg is not None:
-                                with self._lock:
+                            with self._lock:
+                                self._recv_ts.extend(arrivals)
+                                if last_msg is not None:
                                     self._latest = last_msg
 
                         except TimeoutError:

@@ -49,7 +49,9 @@ nodes:
       - pose_reference
       - trigger_left
       - grip_left
+      - joystick_x_left
       - joystick_y_left
+      - joystick_x_right
       - joystick_y_right
       - button_a
       - button_b

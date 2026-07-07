@@ -238,10 +238,22 @@ def _run(args: argparse.Namespace) -> None:
             node.send_output(
                 "grip_left", pa.array([float(msg["lg"])], type=pa.float32()), ts
             )
+        if "lsx" in msg:
+            node.send_output(
+                "joystick_x_left",
+                pa.array([float(msg["lsx"])], type=pa.float32()),
+                ts,
+            )
         if "lsy" in msg:
             node.send_output(
                 "joystick_y_left",
                 pa.array([float(msg["lsy"])], type=pa.float32()),
+                ts,
+            )
+        if "rsx" in msg:
+            node.send_output(
+                "joystick_x_right",
+                pa.array([float(msg["rsx"])], type=pa.float32()),
                 ts,
             )
         if "rsy" in msg:

@@ -116,6 +116,14 @@ def pose_to_array(pos: np.ndarray, rot: Rotation) -> np.ndarray:
     return np.array([pos[0], pos[1], pos[2], q[3], q[0], q[1], q[2]], dtype=np.float32)
 
 
+_POSE_STRUCT_TYPE = pa.struct({"pose": pa.list_(pa.float32())})
+
+
+def pose_struct(pose: np.ndarray) -> pa.Array:
+    """Wrap a pose array as a length-1 StructArray: [{"pose": [...]}]."""
+    return pa.array([{"pose": pose}], type=_POSE_STRUCT_TYPE)
+
+
 class QuestPoseProcessor:
     def process(
         self, msg: dict
@@ -214,13 +222,11 @@ def _run(args: argparse.Namespace) -> None:
         ts = {"timestamp": time.time_ns()}
 
         if pose_right is not None:
-            node.send_output("pose_right", pa.array(pose_right, type=pa.float32()), ts)
+            node.send_output("pose_right", pose_struct(pose_right), ts)
         if pose_left is not None:
-            node.send_output("pose_left", pa.array(pose_left, type=pa.float32()), ts)
+            node.send_output("pose_left", pose_struct(pose_left), ts)
         if pose_reference is not None:
-            node.send_output(
-                "pose_reference", pa.array(pose_reference, type=pa.float32()), ts
-            )
+            node.send_output("pose_reference", pose_struct(pose_reference), ts)
 
         if "rt" in msg:
             node.send_output(

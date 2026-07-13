@@ -128,7 +128,7 @@ def pose_to_array(pos: np.ndarray, rot: Rotation) -> np.ndarray:
 _POSE_STRUCT_TYPE = pa.struct({"pose": pa.list_(pa.float32())})
 
 
-def pose_struct(pose: np.ndarray) -> pa.Array:
+def build_pose_output(pose: np.ndarray) -> pa.Array:
     """Wrap a pose array as a length-1 StructArray: [{"pose": [...]}]."""
     return pa.array([{"pose": pose}], type=_POSE_STRUCT_TYPE)
 
@@ -233,13 +233,13 @@ def _run(args: argparse.Namespace) -> None:
         if pose_right is not None and "rt" in msg:
             gripper_angle = _map_trigger_to_gripper(float(msg["rt"]), "right")
             pose_with_gripper = np.concatenate([pose_right, [gripper_angle]], axis=0)
-            node.send_output("pose_right", pose_struct(pose_with_gripper), ts)
+            node.send_output("pose_right", build_pose_output(pose_with_gripper), ts)
         if pose_left is not None and "lt" in msg:
             gripper_angle = _map_trigger_to_gripper(float(msg["lt"]), "left")
             pose_with_gripper = np.concatenate([pose_left, [gripper_angle]], axis=0)
-            node.send_output("pose_left", pose_struct(pose_with_gripper), ts)
+            node.send_output("pose_left", build_pose_output(pose_with_gripper), ts)
         if pose_reference is not None:
-            node.send_output("pose_reference", pose_struct(pose_reference), ts)
+            node.send_output("pose_reference", build_pose_output(pose_reference), ts)
 
         if "rt" in msg:
             node.send_output(

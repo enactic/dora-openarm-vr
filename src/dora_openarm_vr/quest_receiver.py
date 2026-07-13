@@ -67,6 +67,15 @@ from scipy.spatial.transform import Rotation
 from .smoothing import OneEuroPoseSmoother
 from .udp_receiver import JsonUdpReceiver
 
+
+def _map_trigger_to_gripper(trigger: float, side: str) -> float:
+    """trigger 0.0~1.0 → gripper angle"""
+    if side == "right":
+        return (-1.57 / 2.0) * (1.0 - trigger)  # 0→-1.57, 1→0
+    else:
+        return (1.57 / 2.0) * (1.0 - trigger)  # 0→ 1.57, 1→0
+
+
 # ── Frame alignment — edit here to tune ──────────────────────────────────────
 _FRAME_ROT: np.ndarray = np.array(
     [
@@ -114,6 +123,14 @@ def parse_lh_to_rh(c: dict) -> tuple[np.ndarray, Rotation]:
 def pose_to_array(pos: np.ndarray, rot: Rotation) -> np.ndarray:
     q = rot.as_quat()
     return np.array([pos[0], pos[1], pos[2], q[3], q[0], q[1], q[2]], dtype=np.float32)
+
+
+_POSE_STRUCT_TYPE = pa.struct({"pose": pa.list_(pa.float32())})
+
+
+def build_pose_output(pose: np.ndarray) -> pa.Array:
+    """Wrap a pose array as a length-1 StructArray: [{"pose": [...]}]."""
+    return pa.array([{"pose": pose}], type=_POSE_STRUCT_TYPE)
 
 
 class QuestPoseProcessor:
@@ -213,14 +230,16 @@ def _run(args: argparse.Namespace) -> None:
 
         ts = {"timestamp": time.time_ns()}
 
-        if pose_right is not None:
-            node.send_output("pose_right", pa.array(pose_right, type=pa.float32()), ts)
-        if pose_left is not None:
-            node.send_output("pose_left", pa.array(pose_left, type=pa.float32()), ts)
+        if pose_right is not None and "rt" in msg:
+            gripper_angle = _map_trigger_to_gripper(float(msg["rt"]), "right")
+            pose_with_gripper = np.concatenate([pose_right, [gripper_angle]], axis=0)
+            node.send_output("pose_right", build_pose_output(pose_with_gripper), ts)
+        if pose_left is not None and "lt" in msg:
+            gripper_angle = _map_trigger_to_gripper(float(msg["lt"]), "left")
+            pose_with_gripper = np.concatenate([pose_left, [gripper_angle]], axis=0)
+            node.send_output("pose_left", build_pose_output(pose_with_gripper), ts)
         if pose_reference is not None:
-            node.send_output(
-                "pose_reference", pa.array(pose_reference, type=pa.float32()), ts
-            )
+            node.send_output("pose_reference", build_pose_output(pose_reference), ts)
 
         if "rt" in msg:
             node.send_output(

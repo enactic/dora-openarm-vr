@@ -166,7 +166,7 @@ def _run(args: argparse.Namespace) -> None:
 
         recv_ts = receiver.drain_recv_timestamps()
         if recv_ts:
-            node.send_output("vr_recv_ts", pa.array(recv_ts, type=pa.int64()))
+            node.send_output("vr_receive_times", pa.array(recv_ts, type=pa.int64()))
 
         msg = receiver.latest()
         if msg is None:

@@ -69,11 +69,15 @@ from .udp_receiver import JsonUdpReceiver
 
 
 def _map_trigger_to_gripper(trigger: float, side: str) -> float:
-    """trigger 0.0~1.0 → gripper angle"""
+    """Map a trigger value (0.0–1.0) to a calibrated gripper angle in radians."""
+    trigger = float(np.clip(trigger, 0.0, 1.0))
     if side == "right":
-        return (-1.57 / 2.0) * (1.0 - trigger)  # 0→-1.57, 1→0
+        open_deg, closed_deg = -60.0, 10.0
+    elif side == "left":
+        open_deg, closed_deg = 60.0, -10.0
     else:
-        return (1.57 / 2.0) * (1.0 - trigger)  # 0→ 1.57, 1→0
+        raise ValueError(f"Unsupported gripper side: {side!r}")
+    return float(np.deg2rad(open_deg + trigger * (closed_deg - open_deg)))
 
 
 # ── Frame alignment — edit here to tune ──────────────────────────────────────

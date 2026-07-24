@@ -54,6 +54,9 @@ Meta Quest UDP pose receiver — specification
 - p_out = R_FRAME * p_rel + FRAME_OFFSET_NECK
 - r_out = R_FRAME * r_rel * R_FIX
     * R_FIX = Rot_z(90)
+- Output poses are expressed in the scene's `arm_origin` site frame
+  (chest-level origin between the arms), not in world coordinates.
+  Downstream IK interprets targets in the same frame.
 """
 
 import argparse
@@ -86,7 +89,8 @@ _FRAME_ROT: np.ndarray = np.array(
     dtype=np.float64,
 )
 
-FRAME_OFFSET_NECK: np.ndarray = np.array([0.1, 0, 1.2], dtype=np.float64)
+# Neutral hand position relative to the arm_origin site (chest level).
+FRAME_OFFSET_NECK: np.ndarray = np.array([-0.085, 0, -0.14], dtype=np.float64)
 # ─────────────────────────────────────────────────────────────────────────────
 
 _DEFAULT_HOST = "0.0.0.0"

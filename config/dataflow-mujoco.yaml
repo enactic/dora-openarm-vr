@@ -28,9 +28,11 @@ nodes:
       tick: quittable-tick-leader/tick
     outputs:
       - pose_right
+      - lag_right
       - trigger_right
       - grip_right
       - pose_left
+      - lag_left
       - pose_reference
       - trigger_left
       - grip_left

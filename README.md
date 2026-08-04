@@ -27,7 +27,7 @@ VR-based teleoperation for the OpenArm robot using Meta Quest 3 and dora-rs data
 ## Safety Notes
 
 - When launching the real robot dataflow, **gently pull the trigger slowly** at first to align the robot before making any larger movements.
-- Always verify motion in simulation before running on hardware. -->
+- Always verify motion in simulation before running on hardware.
 
 ## Quick Start
 

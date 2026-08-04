@@ -32,7 +32,7 @@ Meta Quest UDP pose receiver — specification
 [2. Validity Handling]
 - OK (0):     normal processing
 - STALE (1):  HMD is sending last-good pose; pass through smoother normally
-- INVALID(2): do not output pose; reset smoother so re-entry is jump-free
+- INVALID(2): do not output pose; preserve the last pose and clear filter motion
 - buttons/triggers/grips are always forwarded regardless of pose validity
 
 [3. Coordinate Transformation (LH to RH)]
@@ -134,11 +134,17 @@ def pose_to_array(pos: np.ndarray, rot: Rotation) -> np.ndarray:
 
 
 _POSE_STRUCT_TYPE = pa.struct({"pose": pa.list_(pa.float32())})
+# [dx, dy, dz, qw, qx, qy, qz] in arm_origin; translation in meters.
+_LAG_STRUCT_TYPE = pa.struct({"lag": pa.list_(pa.float32())})
 
 
 def build_pose_output(pose: np.ndarray) -> pa.Array:
     """Wrap a pose array as a length-1 StructArray: [{"pose": [...]}]."""
     return pa.array([{"pose": pose}], type=_POSE_STRUCT_TYPE)
+
+
+def build_lag_output(smoother: OneEuroPoseSmoother) -> pa.Array:
+    return pa.array([{"lag": smoother.lag}], type=_LAG_STRUCT_TYPE)
 
 
 class QuestPoseProcessor:
@@ -173,12 +179,18 @@ def _run(args: argparse.Namespace) -> None:
     receiver = JsonUdpReceiver(args.host, args.port)
     processor = QuestPoseProcessor()
 
-    smoother_right = OneEuroPoseSmoother(min_cutoff=2.0, beta=0.04, d_cutoff=1.5)
-    smoother_left = OneEuroPoseSmoother(min_cutoff=2.0, beta=0.04, d_cutoff=1.5)
+    smoother_kwargs = dict(
+        min_cutoff=2.0,
+        beta=0.04,
+        d_cutoff=1.5,
+        lag_cutoff=args.lag_cutoff,
+        max_linear_speed=args.max_linear_speed,
+        max_angular_speed=args.max_angular_speed,
+    )
+    smoother_right = OneEuroPoseSmoother(**smoother_kwargs)
+    smoother_left = OneEuroPoseSmoother(**smoother_kwargs)
     smoother_reference = OneEuroPoseSmoother(min_cutoff=2.0, beta=0.04, d_cutoff=1.5)
 
-    prev_v_right = VALID_OK
-    prev_v_left = VALID_OK
     prev_v_overall = VALID_OK
     prev_v_reference = VALID_OK
 
@@ -212,15 +224,13 @@ def _run(args: argparse.Namespace) -> None:
         pose_right_raw, pose_left_raw, pose_reference_raw = processor.process(msg)
 
         if v_right == VALID_INVALID:
-            if prev_v_right != VALID_INVALID:
-                smoother_right.reset()
+            smoother_right.suspend(now)
             pose_right = None
         else:
             pose_right = smoother_right.smooth(now, pose_right_raw)
 
         if v_left == VALID_INVALID:
-            if prev_v_left != VALID_INVALID:
-                smoother_left.reset()
+            smoother_left.suspend(now)
             pose_left = None
         else:
             pose_left = smoother_left.smooth(now, pose_left_raw)
@@ -232,8 +242,6 @@ def _run(args: argparse.Namespace) -> None:
         else:
             pose_reference = smoother_reference.smooth(now, pose_reference_raw)
 
-        prev_v_right = v_right
-        prev_v_left = v_left
         prev_v_reference = v_overall
 
         ts = {"timestamp": time.time_ns()}
@@ -242,10 +250,12 @@ def _run(args: argparse.Namespace) -> None:
             gripper_angle = _map_trigger_to_gripper(float(msg["rt"]), "right")
             pose_with_gripper = np.concatenate([pose_right, [gripper_angle]], axis=0)
             node.send_output("pose_right", build_pose_output(pose_with_gripper), ts)
+            node.send_output("lag_right", build_lag_output(smoother_right), ts)
         if pose_left is not None and "lt" in msg:
             gripper_angle = _map_trigger_to_gripper(float(msg["lt"]), "left")
             pose_with_gripper = np.concatenate([pose_left, [gripper_angle]], axis=0)
             node.send_output("pose_left", build_pose_output(pose_with_gripper), ts)
+            node.send_output("lag_left", build_lag_output(smoother_left), ts)
         if pose_reference is not None:
             node.send_output("pose_reference", build_pose_output(pose_reference), ts)
 
@@ -315,7 +325,31 @@ def main() -> None:
     )
     parser.add_argument("--host", default=_DEFAULT_HOST)
     parser.add_argument("--port", type=int, default=_DEFAULT_PORT)
+    parser.add_argument(
+        "--lag-cutoff",
+        type=float,
+        default=10.0,
+        help="Lag low-pass cutoff frequency in Hz (default: 10.0).",
+    )
+    parser.add_argument(
+        "--max-linear-speed",
+        type=float,
+        default=1.0,
+        help="Maximum output translation speed in m/s; 0 disables it (default: 1.0).",
+    )
+    parser.add_argument(
+        "--max-angular-speed",
+        type=float,
+        default=6.0,
+        help="Maximum output rotation speed in rad/s; 0 disables it (default: 6.0).",
+    )
     args = parser.parse_args()
+    if not np.isfinite(args.lag_cutoff) or args.lag_cutoff <= 0.0:
+        parser.error("--lag-cutoff must be finite and positive")
+    if not np.isfinite(args.max_linear_speed) or args.max_linear_speed < 0.0:
+        parser.error("--max-linear-speed must be finite and non-negative")
+    if not np.isfinite(args.max_angular_speed) or args.max_angular_speed < 0.0:
+        parser.error("--max-angular-speed must be finite and non-negative")
     _run(args)
 
 

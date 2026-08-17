@@ -239,16 +239,17 @@ def _run(args: argparse.Namespace) -> None:
 
         ts = {"timestamp": time.time_ns()}
 
-        if pose_right is not None and "rt" in msg:
-            gripper_angle = _map_trigger_to_gripper(float(msg["rt"]), "right")
-            pose_with_gripper = np.concatenate([pose_right, [gripper_angle]], axis=0)
-            node.send_output("pose_right", build_pose_output(pose_with_gripper), ts)
-        if pose_left is not None and "lt" in msg:
-            gripper_angle = _map_trigger_to_gripper(float(msg["lt"]), "left")
-            pose_with_gripper = np.concatenate([pose_left, [gripper_angle]], axis=0)
-            node.send_output("pose_left", build_pose_output(pose_with_gripper), ts)
-        if pose_reference is not None:
-            node.send_output("pose_reference", build_pose_output(pose_reference), ts)
+        if "rg" in msg and "lg" in msg and msg["rg"] > 0.5 and msg["lg"] > 0.5:
+            if pose_right is not None and "rt" in msg:
+                gripper_angle = _map_trigger_to_gripper(float(msg["rt"]), "right")
+                pose_with_gripper = np.concatenate([pose_right, [gripper_angle]], axis=0)
+                node.send_output("pose_right", build_pose_output(pose_with_gripper), ts)
+            if pose_left is not None and "lt" in msg:
+                gripper_angle = _map_trigger_to_gripper(float(msg["lt"]), "left")
+                pose_with_gripper = np.concatenate([pose_left, [gripper_angle]], axis=0)
+                node.send_output("pose_left", build_pose_output(pose_with_gripper), ts)
+            if pose_reference is not None:
+                node.send_output("pose_reference", build_pose_output(pose_reference), ts)
 
         if "rt" in msg:
             node.send_output(

@@ -74,22 +74,23 @@ nodes:
       - status
   # ── MuJoCo viewer (replaces follower-right, follower-left, and all cameras) ──
   - id: mujoco-collect
-    build: pip install git+https://github.com/enactic/dora-openarm-mujoco
+    build: pip install "dora-openarm-mujoco>=0.5.0"
     path: dora-openarm-mujoco
     # can swap xml with --xml path/to/your/xml/file
     args: "--keyframe home --enable-collision --ctrl --render --viewer "
     env:
       DISPLAY: ":1"   # needed when running headless with Xvfb
     inputs:
-      position_left:  ik/position_left
-      position_right: ik/position_right
+      move_position_left:  ik/position_left
+      move_position_right: ik/position_right
+      request_state: quittable-tick-leader/tick
       pose_right:     udp-receiver/pose_right
       pose_left:      udp-receiver/pose_left
       joystick_y:     udp-receiver/joystick_y_left
     outputs:
       - status
-      - arm_right_observation   # MuJoCo qpos (replaces follower-right/state)
-      - arm_left_observation    # MuJoCo qpos (replaces follower-left/state)
+      - state_right            # replaces follower-right/state
+      - state_left             # replaces follower-left/state
       - camera_wrist_right      # replaces camera-wrist-right/image
       - camera_wrist_left       # replaces camera-wrist-left/image
       - camera_head_left
@@ -104,9 +105,9 @@ nodes:
     inputs:
       command:               ui/command
       arm_right_action:      ik/position_right
-      arm_right_observation: mujoco-collect/arm_right_observation
+      arm_right_observation: mujoco-collect/state_right
       arm_left_action:       ik/position_left
-      arm_left_observation:  mujoco-collect/arm_left_observation
+      arm_left_observation:  mujoco-collect/state_left
       camera_wrist_right:    mujoco-collect/camera_wrist_right
       camera_wrist_left:     mujoco-collect/camera_wrist_left
       camera_head_left:      mujoco-collect/camera_head_left

@@ -88,12 +88,12 @@ nodes:
 
   # ── MuJoCo viewer  ──
   - id: mujoco-viewer
-    build: pip install git+https://github.com/enactic/dora-openarm-mujoco
+    build: pip install "dora-openarm-mujoco>=0.5.0"
     path: dora-openarm-mujoco
     args: "--keyframe home --viewer --debug-frames"
     inputs:
-      position_left:  ik/position_left
-      position_right: ik/position_right
+      move_position_left:  ik/position_left
+      move_position_right: ik/position_right
       pose_right:     udp-receiver/pose_right
       pose_left:      udp-receiver/pose_left
       joystick_y:     udp-receiver/joystick_y_left
